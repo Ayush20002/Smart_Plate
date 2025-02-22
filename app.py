@@ -13,7 +13,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS
 
-# Configure Gemini API
+# Configure Gemini
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 model = genai.GenerativeModel('gemini-1.5-pro')
 
@@ -41,6 +41,10 @@ def generate_diet():
             diet_description = "vegetarian"  # fallback option
 
         # Create diet prompt with all modifications:
+        # - Use consistent measurement units.
+        # - Provide a variety of snack options.
+        # - Include specific advice for health conditions if any.
+        # - Generate a plan based on the diet type (vegetarian vs non-vegetarian).
         prompt = f"""Act as a professional nutritionist. Create a personalized 7-day diet plan for:
 - Age: {user_data['age']}
 - Gender: {user_data['sex']}
@@ -67,9 +71,23 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
             "dinner": {{"meal": "", "calories": 0, "protein": "0g", "carbs": "0g", "fats": "0g"}},
             "snacks": {{"meal": "", "calories": 0, "protein": "0g", "carbs": "0g", "fats": "0g"}}
         }},
-        ...
+        "tuesday": {{...}},
+        "wednesday": {{...}},
+        "thursday": {{...}},
+        "friday": {{...}},
+        "saturday": {{...}},
+        "sunday": {{...}}
     }},
-    ...
+    "nutritional_goals": {{
+        "daily_calories": 0,
+        "protein_grams": 0,
+        "carb_grams": 0,
+        "fat_grams": 0
+    }},
+    "recommended_foods": [],
+    "foods_to_avoid": [],
+    "cooking_tips": [],
+    "cultural_considerations": ""
 }}"""
 
         # Generate and parse response
@@ -77,7 +95,7 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
         
         # Clean and parse the response
         cleaned_response = response.text.strip()
-        cleaned_response = cleaned_response.replace('``````', '')
+        cleaned_response = cleaned_response.replace('```json', '').replace('```', '')
         
         try:
             diet_plan = json.loads(cleaned_response)
@@ -98,6 +116,5 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
             "message": f"Error generating diet plan: {str(e)}"
         }), 500
 
-# Expose the app object for Vercel's serverless environment
 if __name__ == '__main__':
     app.run()
