@@ -5,6 +5,7 @@ import os
 import json
 from dotenv import load_dotenv
 from validation import validate_diet_input  # Ensure this validation handles the new "diet_type" parameter
+import time
 
 # Load environment variables
 load_dotenv()
@@ -24,15 +25,17 @@ def home():
 @app.route('/api/generate-diet', methods=['POST'])
 def generate_diet():
     try:
+        start_time = time.time()  # Track start time
+
         user_data = request.json
         
-        # Validate input (make sure validate_diet_input now also checks for "diet_type")
+        # Validate input (ensure validate_diet_input checks for all required fields)
         errors = validate_diet_input(user_data)
         if errors:
             return jsonify({"errors": errors}), 400
 
-        # Determine the diet type description for prompt clarity
-        diet_type = user_data.get('diet_type', 'veg').lower()  # Default to vegetarian if not provided
+        # Determine diet type description for prompt clarity
+        diet_type = user_data.get('diet_type', 'veg').lower()
         if diet_type in ['veg', 'vegetarian']:
             diet_description = "vegetarian"
         elif diet_type in ['non-veg', 'non vegetarian']:
@@ -72,24 +75,25 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
     ...
 }}"""
 
-        # Generate and parse response
+        # Call Gemini API with timeout logic
         response = model.generate_content(prompt)
-        
-        # Clean and parse the response
+
+        # Check if execution exceeds timeout limit (4 seconds)
+        if time.time() - start_time > 4:
+            return jsonify({"status": "error", "message": "Request timed out"}), 504
+
+        # Parse response from Gemini API
         cleaned_response = response.text.strip()
-        cleaned_response = cleaned_response.replace('``````', '')
         
         try:
             diet_plan = json.loads(cleaned_response)
-            return jsonify({
-                "status": "success",
-                "diet_plan": diet_plan
-            })
+            return jsonify({"status": "success", "diet_plan": diet_plan})
+        
         except json.JSONDecodeError as e:
             return jsonify({
                 "status": "error",
                 "message": f"Failed to parse response: {str(e)}",
-                "raw_response": cleaned_response
+                "raw_response": cleaned_response,
             }), 500
 
     except Exception as e:
