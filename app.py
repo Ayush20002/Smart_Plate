@@ -99,4 +99,5 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
         }), 500
 
 # Expose the app object for Vercel's serverless environment
-app = app
+if __name__ == '__main__':
+    app.run()
