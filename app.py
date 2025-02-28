@@ -68,8 +68,8 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
         "monday": {{
             "breakfast": {{"meal": "", "calories": 0, "protein": "0g", "carbs": "0g", "fats": "0g"}},
             "lunch": {{"meal": "", "calories": 0, "protein": "0g", "carbs": "0g", "fats": "0g"}},
-            "dinner": {{"meal": "", "calories": 0, "protein": "0g", "carbs": "0g", "fats": "0g"}},
-            "snacks": {{"meal": "", "calories": 0, "protein": "0g", "carbs": "0g", "fats": "0g"}}
+            "snacks": {{"meal": "", "calories": 0, "protein": "0g", "carbs": "0g", "fats": "0g"}},
+            "dinner": {{"meal": "", "calories": 0, "protein": "0g", "carbs": "0g", "fats": "0g"}}
         }},
         "tuesday": {{...}},
         "wednesday": {{...}},
