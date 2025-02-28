@@ -5,6 +5,7 @@ import os
 import json
 from dotenv import load_dotenv
 from validation import validate_diet_input  # Ensure this validation handles the new "diet_type" parameter
+import signal
 
 # Load environment variables
 load_dotenv()
@@ -13,9 +14,16 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS
 
-# Configure Gemini
+# Configure Gemini with faster model
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('gemini-2.0-flash')  # Updated model
+
+# Timeout handler for model response
+class TimeoutException(Exception):
+    pass
+
+def timeout_handler(signum, frame):
+    raise TimeoutException("Model response timed out")
 
 @app.route('/')
 def home():
@@ -30,21 +38,17 @@ def generate_diet():
         errors = validate_diet_input(user_data)
         if errors:
             return jsonify({"errors": errors}), 400
-
+        
         # Determine the diet type description for prompt clarity
-        diet_type = user_data.get('diet_type', 'veg').lower()  # Default to vegetarian if not provided
+        diet_type = user_data.get('diet_type', 'veg').lower()
         if diet_type in ['veg', 'vegetarian']:
             diet_description = "vegetarian"
         elif diet_type in ['non-veg', 'non vegetarian']:
             diet_description = "non-vegetarian"
         else:
-            diet_description = "vegetarian"  # fallback option
+            diet_description = "vegetarian"
 
-        # Create diet prompt with all modifications:
-        # - Use consistent measurement units.
-        # - Provide a variety of snack options.
-        # - Include specific advice for health conditions if any.
-        # - Generate a plan based on the diet type (vegetarian vs non-vegetarian).
+        # Original prompt preserved exactly as requested
         prompt = f"""Act as a professional nutritionist. Create a personalized 7-day diet plan for:
 - Age: {user_data['age']}
 - Gender: {user_data['sex']}
@@ -53,7 +57,6 @@ def generate_diet():
 - Location: {user_data['state']}, {user_data['country']}
 - Health Conditions: {', '.join(user_data['health_conditions']) if user_data.get('health_conditions') else "None"}
 - Diet Preference: {diet_type}
-
 When creating the diet plan:
 1. Use **consistent measurement units** for all volume measurements. For example, use "cups" exclusively (avoid mixing with "glasses" or other units).
 2. For snack options, provide a **variety of choices** and avoid repeating the same snack (for instance, do not list "Mixed Nuts" multiple times; instead, include options like fruits, yogurt, veggie sticks, etc.).
@@ -61,7 +64,6 @@ When creating the diet plan:
 4. Ensure that the meal options adhere to the specified diet preference (i.e., all meals should be {diet_type}).
 5. Don't repeat the meal in any day so try to give repeat the meal on another day like it should not say like this:repeat Monday's Breakfast on particular day .
 6. If user select non-vegeterian then dont only give non-veg meal also try to include veg meal that are healthy and present in that region.
-
 Provide the response in perfect JSON format without any Markdown formatting. Structure it exactly like this:
 {{
     "weekly_plan": {{
@@ -90,12 +92,17 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
     "cultural_considerations": ""
 }}"""
 
-        # Generate and parse response
-        response = model.generate_content(prompt)
+        # Set timeout for model response
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(30)  # 30-second timeout
         
+        try:
+            response = model.generate_content(prompt)
+        finally:
+            signal.alarm(0)  # Disable alarm
+            
         # Clean and parse the response
-        cleaned_response = response.text.strip()
-        cleaned_response = cleaned_response.replace('```json', '').replace('```', '')
+        cleaned_response = response.text.strip().replace('```json', '').replace('```', '')
         
         try:
             diet_plan = json.loads(cleaned_response)
@@ -109,7 +116,12 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
                 "message": f"Failed to parse response: {str(e)}",
                 "raw_response": cleaned_response
             }), 500
-
+            
+    except TimeoutException:
+        return jsonify({
+            "status": "error",
+            "message": "Model response timed out. Please try again."
+        }), 504
     except Exception as e:
         return jsonify({
             "status": "error",
@@ -117,4 +129,4 @@ Provide the response in perfect JSON format without any Markdown formatting. Str
         }), 500
 
 if __name__ == '__main__':
-    app.run()
+    app.run(threaded=True)
